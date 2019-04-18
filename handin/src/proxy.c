@@ -253,18 +253,20 @@ int process_client_read(client **clients, size_t i, int data_available, fd_set *
 
 }
 
-int start_proxying() {
+int start_proxying(char *log_file, float alpha, unsigned short listen_port, char *fake_ip, char *dns_ip, unsigned short dns_port, char *www_ip) {
     int max_fd, nready, listen_fd;
     fd_set read_set, read_ready_set, write_set, write_ready_set;
     struct sockaddr_in cli_addr;
     socklen_t cli_size;
     client **clients;
     size_t i;
-
-    unsigned short listen_port = 8888;
-    char *server_ip = "127.0.0.1";
-    unsigned short server_port = 10000;
-    char *my_ip = "0.0.0.0";
+    printf("listen_port = %d",listen_port);
+    printf("fake_ip = %s", fake_ip);
+    printf("server_ip = %s",www_ip);
+    //unsigned short listen_port = 8888;
+    char *server_ip = www_ip; //"127.0.0.1";
+    unsigned short server_port = 8080; //10000;
+    char *my_ip = fake_ip; //"0.0.0.0";
 
     
 
@@ -359,9 +361,19 @@ int start_proxying() {
 
 }
 
-int main() {
-    // start_proxying();
+int main(int argc, char* argv[]) {
+    char* log_file = argv[1];
+    char* a = argv[2];
+    char* lp = argv[3];
+    char* fake_ip = argv[4];
+    char* dns_ip = argv[5];
+    char* dp = argv[6];
+    char* www_ip = argv[7]; 
+    float alpha = (float) atoi(a);
+    unsigned short listen_port = (unsigned short) atoi(lp);
+    unsigned short dns_port = (unsigned short) atoi(dp);
+    
     printf("Starting the proxy...\n");
-    start_proxying();
+    start_proxying(log_file, alpha, listen_port, fake_ip, dns_ip, dns_port, www_ip);
     return 0;
 }

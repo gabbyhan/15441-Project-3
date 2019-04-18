@@ -18,5 +18,5 @@ struct client_struct
 };
 
 typedef struct client_struct client;
+int start_proxying(char *log_file, float alpha, unsigned short listen_port, char *fake_ip, char *dns_ip, unsigned short dns_port, char *www_ip);
 
-int start_proxying();
