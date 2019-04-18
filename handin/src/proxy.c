@@ -194,8 +194,8 @@ int recv_from_client(client** clients, size_t i) {
  *  - appends data to the client's send buffer and returns the number of bytes appended
  *
 */
-int queue_message_send(client **clients, size_t i, char *buf) {
-    size_t n = strlen(buf);
+int queue_message_send(client **clients, size_t i, char *buf, int msg_len) {
+    size_t n = (size_t) msg_len; //strlen(buf);
     size_t new_size;
 
     new_size = clients[i]->send_buf_size;
@@ -230,6 +230,7 @@ int queue_message_send(client **clients, size_t i, char *buf) {
 int process_client_read(client **clients, size_t i, int data_available, fd_set *write_set) {
     char *msg_rcvd;
     int nread;
+    int msg_len;
     if (data_available == 1) {
         if ((nread = recv_from_client(clients, i)) < 0) {
             fprintf(stderr, "start_proxying: Error while receiving from client\n");
@@ -239,14 +240,14 @@ int process_client_read(client **clients, size_t i, int data_available, fd_set *
             return -1;
         }
     }
-    
+    msg_len = find_http_message_end(clients[i]->recv_buf, clients[i]->recv_buf_len);
     if ((msg_rcvd = pop_message(&(clients[i]->recv_buf), &(clients[i]->recv_buf_len), &clients[i]->recv_buf_size)) == NULL) {
         return 0;
     }
 
     else {
         int sibling_idx = clients[i]->sibling_idx;
-        int bytes_queued = queue_message_send(clients, sibling_idx, msg_rcvd);
+        int bytes_queued = queue_message_send(clients, sibling_idx, msg_rcvd, msg_len);
         FD_SET(clients[sibling_idx]->fd, write_set);
         return bytes_queued;
     }
