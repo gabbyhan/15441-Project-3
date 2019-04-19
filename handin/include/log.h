@@ -12,6 +12,6 @@
 
 FILE* log_create(char *file_name);
 
-void log_add(FILE *f,char *request_line, char *status,char *ip,pid_t p, int size);
+void log_add(FILE *f, int duration, int tput, int avg_tput, int bitrate, char *server_ip, char* chunkname);
 
 void log_close(FILE *f);
