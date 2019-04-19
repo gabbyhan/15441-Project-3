@@ -159,14 +159,40 @@ int recv_from_client(client** clients, size_t i) {
     int n;
     char buf[INIT_BUF_SIZE];
     size_t new_size;
-
+    //char get[3];
     n = recv(clients[i]->fd, buf, INIT_BUF_SIZE, 0);
 
     
     if (n <= 0) {
         return n;
     }
-
+    if(strstr(buf,"GET") != NULL) 
+    {
+      char *end = strstr(buf,"\r\n");
+      char uri[end-buf+2];
+      memcpy(uri,buf,end-buf+2);
+      char *a = strstr(uri,"Seg");
+      if(a != NULL)
+      {
+        char *b = malloc(a-uri);
+        memcpy(b,uri,a-uri);
+      	char *c = strrchr(b,'/');
+        char before_bitrate[c-b+2];
+        memcpy(before_bitrate,uri,c-b+1);
+        before_bitrate[c-b+1] = 0;
+        char *temp_end = strstr(uri,"\r\n");
+        char after_bitrate[temp_end-a+1];
+        memcpy(after_bitrate,a,temp_end-a+1);
+        after_bitrate[temp_end-a] = 0;
+        //call bitrate function 
+        char new_uri[c-b+1+32+strlen(a)];
+        sprintf(new_uri,"%s%d%s",before_bitrate,10,after_bitrate);
+        char new_buf[INIT_BUF_SIZE];
+        sprintf(new_buf,"%s\r\n%s",new_uri,end+2);
+        free(b); 
+      } 
+    }
+        
     new_size = clients[i]->recv_buf_size;
 
     while (n > new_size - clients[i]->recv_buf_len) {
@@ -261,9 +287,6 @@ int start_proxying(char *log_file, float alpha, unsigned short listen_port, char
     socklen_t cli_size;
     client **clients;
     size_t i;
-    printf("listen_port = %d",listen_port);
-    printf("fake_ip = %s", fake_ip);
-    printf("server_ip = %s",www_ip);
     //unsigned short listen_port = 8888;
     char *server_ip = www_ip; //"127.0.0.1";
     unsigned short server_port = 8080; //10000;
