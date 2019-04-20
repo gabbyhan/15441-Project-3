@@ -15,8 +15,14 @@ struct client_struct
     size_t send_buf_size;
     size_t is_server;
     size_t sibling_idx;
+    double tput;
+    struct timeval *ts;
+    struct timeval *tf;
+    int num_b;
+    int *bitrates;
+    int our_bitrate;
 };
 
 typedef struct client_struct client;
-int start_proxying(char *log_file, float alpha, unsigned short listen_port, char *fake_ip, char *dns_ip, unsigned short dns_port, char *www_ip);
+int start_proxying(char *log_file, double alpha, unsigned short listen_port, char *fake_ip, char *dns_ip, unsigned short dns_port, char *www_ip);
 

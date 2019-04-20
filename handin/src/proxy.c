@@ -11,8 +11,9 @@
 *              This makes it easier to set a rule      *
 *              to send such mail to trash :)           *
 ********************************************************/
+#include <time.h>
+#include <sys/stat.h>
 #include "proxy.h"
-
 
 /*
  *  @REQUIRES:
@@ -23,7 +24,7 @@
  *  @ENSURES: returns a pointer to a new client struct
  *
 */
-client *new_client(int client_fd, int is_server, size_t sibling_idx) {
+client *new_client(int client_fd, int is_server, size_t sibling_idx, double tput) {
     client *new = calloc(1, sizeof(client));
     new->fd = client_fd;
     new->recv_buf = calloc(INIT_BUF_SIZE, 1);
@@ -33,6 +34,17 @@ client *new_client(int client_fd, int is_server, size_t sibling_idx) {
     new->recv_buf_size = INIT_BUF_SIZE;
     new->send_buf_size = INIT_BUF_SIZE;
     new->sibling_idx = sibling_idx;
+
+    new->is_server = is_server;
+    new->tput = tput;
+    new->ts = malloc(sizeof(struct timeval));
+    new->tf = malloc(sizeof(struct timeval));
+    gettimeofday(new->ts, NULL);
+    gettimeofday(new->tf, NULL);
+
+    new->num_b = 0;
+    //new->bitrates;
+    new->our_bitrate = 0;
     return new;
 }
 
@@ -54,11 +66,11 @@ void free_client(client* c) {
  *  @ENSURES: Returns the index of the added client if possible, otherwise -1
  *
 */
-int add_client(int client_fd, client **clients, fd_set *read_set, int is_server, size_t sibling_idx) {
+int add_client(int client_fd, client **clients, fd_set *read_set, int is_server, size_t sibling_idx, double tput) {
     int i;
     for (i = 0; i < MAX_CLIENTS - 1; i ++) {
         if (clients[i] == NULL) {
-            clients[i] = new_client(client_fd, is_server, sibling_idx);
+            clients[i] = new_client(client_fd, is_server, sibling_idx, tput);
             FD_SET(client_fd, read_set);
             return i;
         }
@@ -87,6 +99,8 @@ int remove_client(client **clients, size_t i, fd_set *read_set, fd_set *write_se
     FD_CLR(clients[i]->fd, read_set);
     FD_CLR(clients[i]->fd, write_set);
     sib_idx = clients[i]->sibling_idx;
+    //TODO: FREE TIME STRUCTS???
+
     if (clients[sib_idx] != NULL) {
         printf("Removing client on fd: %d\n", clients[sib_idx]->fd);
         close(clients[sib_idx]->fd);
@@ -112,6 +126,102 @@ int find_maxfd(int listen_fd, client **clients) {
     }
     return max_fd;
 }
+
+
+
+/* @REQUIRES: path to f4m file, empty array
+ * @ENSURES:
+ *  - parses f4m file and save bitrates in the array
+ */
+void get_bitrates(char *f_path, int *bitrates)
+{
+    struct stat st;
+    int bit_len;
+    int i=0;
+    size_t f_size;
+    char *f_buf;
+    char *bit_ptr;
+    char *q_ptr;
+    char *bit_str;
+    FILE *f;
+
+    //get size of file
+    stat(f_path, &st);                                                       
+    f_size = st.st_size;
+
+    //open and save file in buf                                                              
+    f = fopen(f_path, "r");                                            
+    f_buf = malloc(f_size);
+    fread(f_buf, f_size, 1, f);
+
+    bit_ptr = f_buf;
+    while(strstr(bit_ptr, "bitrate=") != NULL)
+    {
+        bit_ptr = strstr(bit_ptr, "bitrate=");
+        bit_ptr += 9;
+        q_ptr = strchr(bit_ptr, '"');
+        bit_len = q_ptr - bit_ptr;
+        bit_str = malloc(bit_len);
+        memcpy(bit_str, bit_ptr, bit_len);
+        bitrates[i] = atoi(bit_str);
+        free(bit_str);
+        i++;
+    }
+    
+    free(f_buf);  
+}
+
+/* GET NUMBER OF BITRATES IN A F4M FILE */
+int get_num_bitrates(char *f_path)
+{
+    struct stat st;
+    size_t f_size;
+    char *f_buf;
+    char *bit_ptr;
+    int num_b = 0;
+    FILE *f;
+
+    //get number of bitrates
+    stat(f_path, &st);                                                       
+    f_size = st.st_size;
+                                                            
+    f = fopen(f_path, "r");                                            
+    f_buf = malloc(f_size);
+    fread(f_buf, f_size, 1, f);
+
+    bit_ptr = f_buf;
+    while(strstr(bit_ptr, "bitrate=") != NULL)
+    {
+        num_b++;
+        bit_ptr = strstr(bit_ptr, "bitrate=");
+        bit_ptr+= 10;
+    }
+    free(f_buf);
+
+    return num_b;
+}
+
+/* @REQUIRES: array of bitrates, number of bitrates, throughput
+ * @ENSURES: 
+ *  - choose largest bitrate based on throughput */
+int choose_bitrate(int *bitrates, int num_b, double tput)
+{
+    if(num_b == 0) {
+        return -1;
+    }
+    int b = bitrates[0];
+    //bitrates are in increasing order
+    int i;
+    for(i =0; i< num_b; i++){
+        if(bitrates[i] * 1.5 <= tput){
+            b = bitrates[i];
+        }
+    }
+    return b;
+}
+
+
+
 
 
 /*
@@ -155,24 +265,69 @@ int process_client_send(client **clients, size_t i) {
  *  - If data is received, return the number of bytes received, otherwise return 0 or -1
  *
 */
-int recv_from_client(client** clients, size_t i) {
+int recv_from_client(client** clients, size_t i, double alpha) {
     int n;
     char buf[INIT_BUF_SIZE];
+    char new_buf[INIT_BUF_SIZE];
     size_t new_size;
-    //char get[3];
-    n = recv(clients[i]->fd, buf, INIT_BUF_SIZE, 0);
+    double tput_new = 0;
+    int chunk_size;
 
+    n = recv(clients[i]->fd, buf, INIT_BUF_SIZE, 0);
     
     if (n <= 0) {
         return n;
     }
+
+    /* if client is the server, save tf and new throughput */
+    if(clients[i]->is_server)
+    {
+    	gettimeofday(clients[i]->tf, NULL);
+        tput_new = ((double)n) / (clients[i]->tf->tv_sec - clients[i]->ts->tv_sec);
+	chunk_size = get_content_length(buf, (size_t) n); 	
+	clients[i]->tput = alpha*tput_new + (1-alpha)*(clients[i]->tput);
+    }
+    /*if client is browser, save ts */
+    else {
+    	gettimeofday(clients[i]->ts, NULL);
+    } 
+
     if(strstr(buf,"GET") != NULL) 
     {
+
       char *end = strstr(buf,"\r\n");
       char uri[end-buf+2];
       memcpy(uri,buf,end-buf+2);
       char *a = strstr(uri,"Seg");
-      if(a != NULL)
+      char *f = strstr(uri, ".f4m");
+      char *temp_end = strstr(uri,"\r\n");
+      
+      if(f != NULL) //IF REQUEST FOR THE FM4 FILE
+      {
+      	char before_add[f-uri+8];
+	char file_name[f-uri+5];
+  	memcpy(before_add, uri, f-uri);
+	memcpy(file_name, before_add, f-uri);
+	memcpy(&file_name[f-uri], ".f4m\0", 5);
+	char *file_start = strchr(file_name, '/'); //FILE PATH
+
+	memcpy(&before_add[f-uri], "_nolist\0", 8);
+	char after_add[temp_end-f+1];
+	memcpy(after_add, f, temp_end-f);
+	after_add[temp_end-f] = 0;
+	char new_uri[strlen(before_add)+2+strlen(after_add)];
+	sprintf(new_uri, "%s%s", before_add, after_add);
+	//char new_buf[INIT_BUF_SIZE];
+	sprintf(new_buf, "%s\r\n%s", new_uri, end+2);
+	printf("NEW BUF: \n%s\n", new_buf);
+	//save bitrates from fm4 file	
+      	clients[i]->num_b = get_num_bitrates(file_start);
+      	clients[i]->bitrates = malloc(sizeof(int) * clients[i]->num_b);
+      	get_bitrates(file_start, clients[i]->bitrates);
+      
+      }
+
+      if(a != NULL) //IF REQUEST FOR VIDEO CHUNK
       {
         char *b = malloc(a-uri);
         memcpy(b,uri,a-uri);
@@ -180,30 +335,32 @@ int recv_from_client(client** clients, size_t i) {
         char before_bitrate[c-b+2];
         memcpy(before_bitrate,uri,c-b+1);
         before_bitrate[c-b+1] = 0;
-        char *temp_end = strstr(uri,"\r\n");
+
         char after_bitrate[temp_end-a+1];
         memcpy(after_bitrate,a,temp_end-a+1);
         after_bitrate[temp_end-a] = 0;
-        //call bitrate function 
+	//choose and replace the bitrate in the request
+        clients[i]->our_bitrate = choose_bitrate(clients[i]->bitrates, clients[i]->num_b, clients[i]->tput);
+
         char new_uri[c-b+1+32+strlen(a)];
-        sprintf(new_uri,"%s%d%s",before_bitrate,10,after_bitrate);
+        sprintf(new_uri,"%s%d%s",before_bitrate, clients[i]->our_bitrate, after_bitrate);
         char new_buf[INIT_BUF_SIZE];
         sprintf(new_buf,"%s\r\n%s",new_uri,end+2);
         free(b); 
       } 
     }
         
+    n = strlen(new_buf);
     new_size = clients[i]->recv_buf_size;
 
     while (n > new_size - clients[i]->recv_buf_len) {
         new_size *= 2;
         
     }
-    clients[i]->recv_buf = resize(clients[i]->recv_buf, 
-        new_size, clients[i]->recv_buf_size);
+    clients[i]->recv_buf = resize(clients[i]->recv_buf, new_size, clients[i]->recv_buf_size);
     clients[i]->recv_buf_size = new_size;
 
-    memcpy(&(clients[i]->recv_buf[clients[i]->recv_buf_len]), buf, n);
+    memcpy(&(clients[i]->recv_buf[clients[i]->recv_buf_len]), new_buf, n);
     clients[i]->recv_buf_len += n;
 
     return n;
@@ -253,12 +410,12 @@ int queue_message_send(client **clients, size_t i, char *buf, int msg_len) {
  *  - returns number of bytes queued if no errors, -1 otherwise
  *
 */
-int process_client_read(client **clients, size_t i, int data_available, fd_set *write_set) {
+int process_client_read(client **clients, size_t i, int data_available, fd_set *write_set, double alpha) {
     char *msg_rcvd;
     int nread;
     int msg_len;
     if (data_available == 1) {
-        if ((nread = recv_from_client(clients, i)) < 0) {
+        if ((nread = recv_from_client(clients, i, alpha)) < 0) {
             fprintf(stderr, "start_proxying: Error while receiving from client\n");
             return -1;
         }
@@ -280,7 +437,7 @@ int process_client_read(client **clients, size_t i, int data_available, fd_set *
 
 }
 
-int start_proxying(char *log_file, float alpha, unsigned short listen_port, char *fake_ip, char *dns_ip, unsigned short dns_port, char *www_ip) {
+int start_proxying(char *log_file, double alpha, unsigned short listen_port, char *fake_ip, char *dns_ip, unsigned short dns_port, char *www_ip) {
     int max_fd, nready, listen_fd;
     fd_set read_set, read_ready_set, write_set, write_ready_set;
     struct sockaddr_in cli_addr;
@@ -330,10 +487,10 @@ int start_proxying(char *log_file, float alpha, unsigned short listen_port, char
                 }
 
                 // add the client to the client_fd list of filed descriptors
-                else if ((client_idx = add_client(client_fd, clients, &read_set, 0, -1))!= -1) {
+                else if ((client_idx = add_client(client_fd, clients, &read_set, 0, -1, 0))!= -1) {
                     
                     int sibling_fd = open_socket_to_server(my_ip, server_ip, server_port);
-                    int server_idx = add_client(sibling_fd, clients, &read_set, 1, client_idx);
+                    int server_idx = add_client(sibling_fd, clients, &read_set, 1, client_idx, 0);
                     clients[client_idx]->sibling_idx = server_idx;
                     printf("start_proxying: Connected to %s on FD %d\n"
                     "And its sibling %s on FD %d\n", inet_ntoa(cli_addr.sin_addr),
@@ -352,7 +509,7 @@ int start_proxying(char *log_file, float alpha, unsigned short listen_port, char
                         data_available = 1;
                     }
 
-                    int nread = process_client_read(clients, i, data_available, &write_set);
+                    int nread = process_client_read(clients, i, data_available, &write_set, alpha);
 
                     if (nread < 0) {
                         if (remove_client(clients, i, &read_set, &write_set) < 0) {
@@ -393,7 +550,7 @@ int main(int argc, char* argv[]) {
     char* dns_ip = argv[5];
     char* dp = argv[6];
     char* www_ip = argv[7]; 
-    float alpha = (float) atoi(a);
+    double alpha = (double) atof(a);
     unsigned short listen_port = (unsigned short) atoi(lp);
     unsigned short dns_port = (unsigned short) atoi(dp);
     
