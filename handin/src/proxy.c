@@ -135,6 +135,7 @@ int find_maxfd(int listen_fd, client **clients) {
  */
 void get_bitrates(char *f_path, int *bitrates)
 {
+    char *temp = "/var/www/vod/big_buck_bunny.f4m";
     struct stat st;
     int bit_len;
     int i=0;
@@ -146,11 +147,11 @@ void get_bitrates(char *f_path, int *bitrates)
     FILE *f;
 
     //get size of file
-    stat(f_path, &st);                                                       
+    stat(temp, &st);                                                       
     f_size = st.st_size;
 
     //open and save file in buf                                                              
-    f = fopen(f_path, "r");                                            
+    f = fopen(temp, "r");                                            
     f_buf = malloc(f_size);
     fread(f_buf, f_size, 1, f);
 
@@ -164,16 +165,18 @@ void get_bitrates(char *f_path, int *bitrates)
         bit_str = malloc(bit_len);
         memcpy(bit_str, bit_ptr, bit_len);
         bitrates[i] = atoi(bit_str);
+        printf("this is the bitrate %d\n",bitrates[i]);
         free(bit_str);
         i++;
     }
-    
+    printf("end of get_bitrates\n");
     free(f_buf);  
 }
 
 /* GET NUMBER OF BITRATES IN A F4M FILE */
 int get_num_bitrates(char *f_path)
 {
+    char *temp = "/var/www/vod/big_buck_bunny.f4m";
     struct stat st;
     size_t f_size;
     char *f_buf;
@@ -182,17 +185,20 @@ int get_num_bitrates(char *f_path)
     FILE *f;
 
     //get number of bitrates
-    stat(f_path, &st);                                                       
+    stat(temp, &st);                                                       
     f_size = st.st_size;
-                                                            
-    f = fopen(f_path, "r");                                            
+    f = fopen(temp, "r");
     f_buf = malloc(f_size);
+    printf("it doesnt segfault here\n");
     fread(f_buf, f_size, 1, f);
-
+    printf("it seqfaults right after this\n");
     bit_ptr = f_buf;
+    if(strstr(bit_ptr,"bitrate=") == NULL) printf("we cant find bitrate!\n");
     while(strstr(bit_ptr, "bitrate=") != NULL)
-    {
+    { 
+        
         num_b++;
+        printf("%d\n",num_b);
         bit_ptr = strstr(bit_ptr, "bitrate=");
         bit_ptr+= 10;
     }
@@ -206,6 +212,7 @@ int get_num_bitrates(char *f_path)
  *  - choose largest bitrate based on throughput */
 int choose_bitrate(int *bitrates, int num_b, double tput)
 {
+    printf("this is the tput: %f\n",tput);
     if(num_b == 0) {
         return -1;
     }
@@ -268,7 +275,6 @@ int process_client_send(client **clients, size_t i) {
 int recv_from_client(client** clients, size_t i, double alpha) {
     int n;
     char buf[INIT_BUF_SIZE];
-    char new_buf[INIT_BUF_SIZE];
     size_t new_size;
     double tput_new = 0;
     int chunk_size;
@@ -283,6 +289,7 @@ int recv_from_client(client** clients, size_t i, double alpha) {
     if(clients[i]->is_server)
     {
     	gettimeofday(clients[i]->tf, NULL);
+        printf("%f\n",n);
         tput_new = ((double)n) / (clients[i]->tf->tv_sec - clients[i]->ts->tv_sec);
 	chunk_size = get_content_length(buf, (size_t) n); 	
 	clients[i]->tput = alpha*tput_new + (1-alpha)*(clients[i]->tput);
@@ -317,18 +324,23 @@ int recv_from_client(client** clients, size_t i, double alpha) {
 	after_add[temp_end-f] = 0;
 	char new_uri[strlen(before_add)+2+strlen(after_add)];
 	sprintf(new_uri, "%s%s", before_add, after_add);
-	//char new_buf[INIT_BUF_SIZE];
+        printf("NEW URI: %s\n",new_uri);
+        char new_buf[INIT_BUF_SIZE];
 	sprintf(new_buf, "%s\r\n%s", new_uri, end+2);
-	printf("NEW BUF: \n%s\n", new_buf);
+        n = strlen(new_buf);
+        memset(buf,0,INIT_BUF_SIZE);
+        memcpy(buf,new_buf,n);
 	//save bitrates from fm4 file	
       	clients[i]->num_b = get_num_bitrates(file_start);
+        printf("this is the number of bitrates: %d\n",clients[i]->num_b);
       	clients[i]->bitrates = malloc(sizeof(int) * clients[i]->num_b);
       	get_bitrates(file_start, clients[i]->bitrates);
-      
+        printf("BUF:\n%s\n",buf);  
       }
 
       if(a != NULL) //IF REQUEST FOR VIDEO CHUNK
       {
+        printf("we need to replace the bitrate\n");
         char *b = malloc(a-uri);
         memcpy(b,uri,a-uri);
       	char *c = strrchr(b,'/');
@@ -344,13 +356,17 @@ int recv_from_client(client** clients, size_t i, double alpha) {
 
         char new_uri[c-b+1+32+strlen(a)];
         sprintf(new_uri,"%s%d%s",before_bitrate, clients[i]->our_bitrate, after_bitrate);
+        printf("this is also a new uri: %s\n",new_uri);
         char new_buf[INIT_BUF_SIZE];
-        sprintf(new_buf,"%s\r\n%s",new_uri,end+2);
+        sprintf(new_buf,"%s\r\n%s",new_uri,end+2); 
+        n = strlen(new_buf);
+	memset(buf,0,INIT_BUF_SIZE);
+        memcpy(buf,new_buf,n);
         free(b); 
       } 
     }
         
-    n = strlen(new_buf);
+    printf("this is the buf: %s\n",buf);
     new_size = clients[i]->recv_buf_size;
 
     while (n > new_size - clients[i]->recv_buf_len) {
@@ -360,7 +376,7 @@ int recv_from_client(client** clients, size_t i, double alpha) {
     clients[i]->recv_buf = resize(clients[i]->recv_buf, new_size, clients[i]->recv_buf_size);
     clients[i]->recv_buf_size = new_size;
 
-    memcpy(&(clients[i]->recv_buf[clients[i]->recv_buf_len]), new_buf, n);
+    memcpy(&(clients[i]->recv_buf[clients[i]->recv_buf_len]), buf, n);
     clients[i]->recv_buf_len += n;
 
     return n;
