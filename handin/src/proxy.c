@@ -37,10 +37,10 @@ client *new_client(int client_fd, int is_server, size_t sibling_idx, double tput
 
     new->is_server = is_server;
     new->tput = tput;
-    new->ts = malloc(sizeof(struct timeval));
-    new->tf = malloc(sizeof(struct timeval));
-    gettimeofday(new->ts, NULL);
-    gettimeofday(new->tf, NULL);
+    //new->ts;
+    //new->tf;
+    gettimeofday(&new->ts, NULL);
+    gettimeofday(&new->tf, NULL);
 
     new->num_b = 0;
     //new->bitrates;
@@ -133,29 +133,17 @@ int find_maxfd(int listen_fd, client **clients) {
  * @ENSURES:
  *  - parses f4m file and save bitrates in the array
  */
-void get_bitrates(char *f_path, int *bitrates)
+void get_bitrates(char *f_buf, int *bitrates)
 {
-    char *temp = "/var/www/vod/big_buck_bunny.f4m";
-    struct stat st;
     int bit_len;
     int i=0;
-    size_t f_size;
-    char *f_buf;
     char *bit_ptr;
     char *q_ptr;
     char *bit_str;
     FILE *f;
 
-    //get size of file
-    stat(temp, &st);                                                       
-    f_size = st.st_size;
-
-    //open and save file in buf                                                              
-    f = fopen(temp, "r");                                            
-    f_buf = malloc(f_size);
-    fread(f_buf, f_size, 1, f);
-
     bit_ptr = f_buf;
+    if(bit_ptr == NULL) printf("hey!\n");
     while(strstr(bit_ptr, "bitrate=") != NULL)
     {
         bit_ptr = strstr(bit_ptr, "bitrate=");
@@ -170,39 +158,24 @@ void get_bitrates(char *f_path, int *bitrates)
         i++;
     }
     printf("end of get_bitrates\n");
-    free(f_buf);  
 }
 
 /* GET NUMBER OF BITRATES IN A F4M FILE */
-int get_num_bitrates(char *f_path)
+int get_num_bitrates(char *f_buf)
 {
-    char *temp = "/var/www/vod/big_buck_bunny.f4m";
-    struct stat st;
-    size_t f_size;
-    char *f_buf;
     char *bit_ptr;
     int num_b = 0;
     FILE *f;
 
     //get number of bitrates
-    stat(temp, &st);                                                       
-    f_size = st.st_size;
-    f = fopen(temp, "r");
-    f_buf = malloc(f_size);
-    printf("it doesnt segfault here\n");
-    fread(f_buf, f_size, 1, f);
-    printf("it seqfaults right after this\n");
     bit_ptr = f_buf;
-    if(strstr(bit_ptr,"bitrate=") == NULL) printf("we cant find bitrate!\n");
     while(strstr(bit_ptr, "bitrate=") != NULL)
     { 
-        
         num_b++;
         printf("%d\n",num_b);
         bit_ptr = strstr(bit_ptr, "bitrate=");
         bit_ptr+= 10;
     }
-    free(f_buf);
 
     return num_b;
 }
@@ -224,6 +197,7 @@ int choose_bitrate(int *bitrates, int num_b, double tput)
             b = bitrates[i];
         }
     }
+    printf("chosen bitrate: %d\n", b);
     return b;
 }
 
@@ -282,21 +256,50 @@ int recv_from_client(client** clients, size_t i, double alpha) {
     n = recv(clients[i]->fd, buf, INIT_BUF_SIZE, 0);
     
     if (n <= 0) {
+	printf("we are receiving a bad n: %d from a server: %d\n",n, clients[i]->is_server);
         return n;
     }
 
     /* if client is the server, save tf and new throughput */
     if(clients[i]->is_server)
     {
-    	gettimeofday(clients[i]->tf, NULL);
-        printf("%f\n",n);
-        tput_new = ((double)n) / (clients[i]->tf->tv_sec - clients[i]->ts->tv_sec);
-	chunk_size = get_content_length(buf, (size_t) n); 	
-	clients[i]->tput = alpha*tput_new + (1-alpha)*(clients[i]->tput);
+	//CHECK FOR FM4 FILE CONTENTS
+	int sib_i = clients[i]->sibling_idx;
+	//printf("buf (LOOKING FOR FM4 CONTENTS): \n%s\n", buf);
+        char *f = strstr(buf, "bitrate=");
+	if(f!=NULL){
+      	    clients[sib_i]->num_b = get_num_bitrates(buf);
+      	    clients[sib_i]->bitrates = malloc(sizeof(int) * clients[sib_i]->num_b);
+      	    get_bitrates(buf, clients[sib_i]->bitrates);
+	}
+    	
+	gettimeofday(&(clients[i]->tf), NULL);
+//	printf("Server: tf: %d, ts: %d for client %d\n", clients[i]->tf.tv_sec, clients[sib_i]->ts.tv_sec, i);
+	
+	int seconds =  (clients[i]->tf.tv_sec - clients[sib_i]->ts.tv_sec);
+	long micro_seconds = (clients[i]->tf.tv_usec - clients[sib_i]->ts.tv_usec);
+  //      printf("SECONDS: %d, MICROSECONDS: %ld\n", seconds, micro_seconds);
+        
+	chunk_size = get_content_length(buf, (size_t) n);
+//	printf("CHUNK SIZE: %d\n", chunk_size);
+	
+	tput_new = ((double) chunk_size) / micro_seconds * 1000000;
+	if(chunk_size == 0){
+		tput_new = 0;
+	}
+	else if(micro_seconds == 0){
+		tput_new = clients[sib_i]->tput * 2;
+	}
+//	printf("tput_new: %f, tput_old: %f\n", tput_new, clients[sib_i]->tput);
+	clients[sib_i]->tput = alpha*tput_new + (1-alpha)*(clients[sib_i]->tput);
+	
+//	printf("tput: %f for %d\n", clients[sib_i]->tput, sib_i);
     }
     /*if client is browser, save ts */
     else {
-    	gettimeofday(clients[i]->ts, NULL);
+	printf("WE ARE THE BROWSER\n");
+    	gettimeofday(&(clients[i]->ts), NULL);
+	printf("ts: %d for client %d\n", clients[i]->ts.tv_sec, i);
     } 
 
     if(strstr(buf,"GET") != NULL) 
@@ -306,12 +309,12 @@ int recv_from_client(client** clients, size_t i, double alpha) {
       char uri[end-buf+2];
       memcpy(uri,buf,end-buf+2);
       char *a = strstr(uri,"Seg");
-      char *f = strstr(uri, ".f4m");
+      char *f = strstr(uri, ".fm4");
       char *temp_end = strstr(uri,"\r\n");
       
-      if(f != NULL) //IF REQUEST FOR THE FM4 FILE
+      if(f != NULL) //IF REQUEST FOR THE F4M FILE
       {
-      	char before_add[f-uri+8];
+      /*	char before_add[f-uri+8];
 	char file_name[f-uri+5];
   	memcpy(before_add, uri, f-uri);
 	memcpy(file_name, before_add, f-uri);
@@ -324,23 +327,20 @@ int recv_from_client(client** clients, size_t i, double alpha) {
 	after_add[temp_end-f] = 0;
 	char new_uri[strlen(before_add)+2+strlen(after_add)];
 	sprintf(new_uri, "%s%s", before_add, after_add);
-        printf("NEW URI: %s\n",new_uri);
+        //printf("NEW URI: %s\n",new_uri);
         char new_buf[INIT_BUF_SIZE];
 	sprintf(new_buf, "%s\r\n%s", new_uri, end+2);
         n = strlen(new_buf);
         memset(buf,0,INIT_BUF_SIZE);
         memcpy(buf,new_buf,n);
 	//save bitrates from fm4 file	
-      	clients[i]->num_b = get_num_bitrates(file_start);
-        printf("this is the number of bitrates: %d\n",clients[i]->num_b);
-      	clients[i]->bitrates = malloc(sizeof(int) * clients[i]->num_b);
-      	get_bitrates(file_start, clients[i]->bitrates);
-        printf("BUF:\n%s\n",buf);  
+
+        */printf("BUF:\n%s\n",buf);  
       }
 
       if(a != NULL) //IF REQUEST FOR VIDEO CHUNK
       {
-        printf("we need to replace the bitrate\n");
+	printf("client : %d, tput: %f\n", i, clients[i]->tput);
         char *b = malloc(a-uri);
         memcpy(b,uri,a-uri);
       	char *c = strrchr(b,'/');
@@ -366,7 +366,7 @@ int recv_from_client(client** clients, size_t i, double alpha) {
       } 
     }
         
-    printf("this is the buf: %s\n",buf);
+    //printf("this is the buf: %s\n",buf);
     new_size = clients[i]->recv_buf_size;
 
     while (n > new_size - clients[i]->recv_buf_len) {
@@ -379,6 +379,7 @@ int recv_from_client(client** clients, size_t i, double alpha) {
     memcpy(&(clients[i]->recv_buf[clients[i]->recv_buf_len]), buf, n);
     clients[i]->recv_buf_len += n;
 
+    printf("\n");
     return n;
 }
 
@@ -528,6 +529,7 @@ int start_proxying(char *log_file, double alpha, unsigned short listen_port, cha
                     int nread = process_client_read(clients, i, data_available, &write_set, alpha);
 
                     if (nread < 0) {
+			printf("nread is less than 0!!!!\n");
                         if (remove_client(clients, i, &read_set, &write_set) < 0) {
                             fprintf(stderr, "start_proxying: Error removing client\n");
                         }
@@ -538,6 +540,7 @@ int start_proxying(char *log_file, double alpha, unsigned short listen_port, cha
                             nready --;
                             int nsend = process_client_send(clients, i);
                             if (nsend < 0) {
+				printf("nsend is less than 0!!!!!\n");
                                 if (remove_client(clients, i, &read_set, &write_set) < 0) {
                                     fprintf(stderr, "start_proxying: Error removing client\n");
                                 }

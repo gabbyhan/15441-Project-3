@@ -16,8 +16,8 @@ struct client_struct
     size_t is_server;
     size_t sibling_idx;
     double tput;
-    struct timeval *ts;
-    struct timeval *tf;
+    struct timeval ts;
+    struct timeval tf;
     int num_b;
     int *bitrates;
     int our_bitrate;
