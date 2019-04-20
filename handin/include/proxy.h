@@ -1,5 +1,6 @@
 #include "httpparser.h"
 #include "customsocket.h"
+#include "log.h"
 
 #define INIT_BUF_SIZE 8192
 #define MAX_CLIENTS FD_SETSIZE
@@ -21,6 +22,7 @@ struct client_struct
     int num_b;
     int *bitrates;
     int our_bitrate;
+    char *chunkname;
 };
 
 typedef struct client_struct client;

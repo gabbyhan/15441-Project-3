@@ -37,6 +37,7 @@ client *new_client(int client_fd, int is_server, size_t sibling_idx, double tput
 
     new->is_server = is_server;
     new->tput = tput;
+    new->chunkname = "";
     //new->ts;
     //new->tf;
     gettimeofday(&new->ts, NULL);
@@ -185,7 +186,7 @@ int get_num_bitrates(char *f_buf)
  *  - choose largest bitrate based on throughput */
 int choose_bitrate(int *bitrates, int num_b, double tput)
 {
-    printf("this is the tput: %f\n",tput);
+    //printf("this is the tput: %f\n",tput);
     if(num_b == 0) {
         return -1;
     }
@@ -246,7 +247,7 @@ int process_client_send(client **clients, size_t i) {
  *  - If data is received, return the number of bytes received, otherwise return 0 or -1
  *
 */
-int recv_from_client(client** clients, size_t i, double alpha) {
+int recv_from_client(client** clients, size_t i, double alpha, FILE *log) {
     int n;
     char buf[INIT_BUF_SIZE];
     size_t new_size;
@@ -265,7 +266,7 @@ int recv_from_client(client** clients, size_t i, double alpha) {
     {
 	//CHECK FOR FM4 FILE CONTENTS
 	int sib_i = clients[i]->sibling_idx;
-	//printf("buf (LOOKING FOR FM4 CONTENTS): \n%s\n", buf);
+	//printf("buf (LOOKING FOR F4M CONTENTS): \n%s\n", buf);
         char *f = strstr(buf, "bitrate=");
 	if(f!=NULL){
       	    clients[sib_i]->num_b = get_num_bitrates(buf);
@@ -273,33 +274,37 @@ int recv_from_client(client** clients, size_t i, double alpha) {
       	    get_bitrates(buf, clients[sib_i]->bitrates);
 	}
     	
-	gettimeofday(&(clients[i]->tf), NULL);
-//	printf("Server: tf: %d, ts: %d for client %d\n", clients[i]->tf.tv_sec, clients[sib_i]->ts.tv_sec, i);
+	else{
+	    gettimeofday(&(clients[i]->tf), NULL);
+            //	printf("Server: tf: %d, ts: %d for client %d\n", clients[i]->tf.tv_sec, clients[sib_i]->ts.tv_sec, i);
 	
-	int seconds =  (clients[i]->tf.tv_sec - clients[sib_i]->ts.tv_sec);
-	long micro_seconds = (clients[i]->tf.tv_usec - clients[sib_i]->ts.tv_usec);
-  //      printf("SECONDS: %d, MICROSECONDS: %ld\n", seconds, micro_seconds);
+	    int seconds =  (clients[i]->tf.tv_sec - clients[sib_i]->ts.tv_sec);
+	    long micro_seconds = (clients[i]->tf.tv_usec - clients[sib_i]->ts.tv_usec);
+    //      printf("SECONDS: %d, MICROSECONDS: %ld\n", seconds, micro_seconds);
         
-	chunk_size = get_content_length(buf, (size_t) n);
-//	printf("CHUNK SIZE: %d\n", chunk_size);
+	    chunk_size = get_content_length(buf, (size_t) n);
+            //	printf("CHUNK SIZE: %d\n", chunk_size);
 	
-	tput_new = ((double) chunk_size) / micro_seconds * 1000000;
-	if(chunk_size == 0){
+	    tput_new = ((double) chunk_size) / micro_seconds * 1000000;
+	    if(chunk_size == 0){
 		tput_new = 0;
-	}
-	else if(micro_seconds == 0){
+	    }
+	    else if(micro_seconds == 0){
 		tput_new = clients[sib_i]->tput * 2;
-	}
-//	printf("tput_new: %f, tput_old: %f\n", tput_new, clients[sib_i]->tput);
-	clients[sib_i]->tput = alpha*tput_new + (1-alpha)*(clients[sib_i]->tput);
+	    }
+            //	printf("tput_new: %f, tput_old: %f\n", tput_new, clients[sib_i]->tput);
+	    clients[sib_i]->tput = alpha*tput_new + (1-alpha)*(clients[sib_i]->tput);
 	
-//	printf("tput: %f for %d\n", clients[sib_i]->tput, sib_i);
+            //	printf("tput: %f for %d\n", clients[sib_i]->tput, sib_i);
+            double duration = ((double)micro_seconds)/1000000;
+            log_add(log, duration, tput_new, clients[sib_i]->tput, clients[sib_i]->our_bitrate, "3.0.0.1", clients[sib_i]->chunkname);
+	}
     }
     /*if client is browser, save ts */
     else {
-	printf("WE ARE THE BROWSER\n");
+	//printf("WE ARE THE BROWSER\n");
     	gettimeofday(&(clients[i]->ts), NULL);
-	printf("ts: %d for client %d\n", clients[i]->ts.tv_sec, i);
+	//printf("ts: %d for client %d\n", clients[i]->ts.tv_sec, i);
     } 
 
     if(strstr(buf,"GET") != NULL) 
@@ -340,7 +345,9 @@ int recv_from_client(client** clients, size_t i, double alpha) {
 
       if(a != NULL) //IF REQUEST FOR VIDEO CHUNK
       {
-	printf("client : %d, tput: %f\n", i, clients[i]->tput);
+	clients[i]->chunkname = uri;
+	//printf("chunkname: %s\n", clients[i]->chunkname);
+	//printf("client : %d, tput: %f\n", i, clients[i]->tput);
         char *b = malloc(a-uri);
         memcpy(b,uri,a-uri);
       	char *c = strrchr(b,'/');
@@ -356,7 +363,7 @@ int recv_from_client(client** clients, size_t i, double alpha) {
 
         char new_uri[c-b+1+32+strlen(a)];
         sprintf(new_uri,"%s%d%s",before_bitrate, clients[i]->our_bitrate, after_bitrate);
-        printf("this is also a new uri: %s\n",new_uri);
+        //printf("this is also a new uri: %s\n",new_uri);
         char new_buf[INIT_BUF_SIZE];
         sprintf(new_buf,"%s\r\n%s",new_uri,end+2); 
         n = strlen(new_buf);
@@ -379,7 +386,7 @@ int recv_from_client(client** clients, size_t i, double alpha) {
     memcpy(&(clients[i]->recv_buf[clients[i]->recv_buf_len]), buf, n);
     clients[i]->recv_buf_len += n;
 
-    printf("\n");
+    //printf("\n");
     return n;
 }
 
@@ -427,12 +434,12 @@ int queue_message_send(client **clients, size_t i, char *buf, int msg_len) {
  *  - returns number of bytes queued if no errors, -1 otherwise
  *
 */
-int process_client_read(client **clients, size_t i, int data_available, fd_set *write_set, double alpha) {
+int process_client_read(client **clients, size_t i, int data_available, fd_set *write_set, double alpha, FILE *log) {
     char *msg_rcvd;
     int nread;
     int msg_len;
     if (data_available == 1) {
-        if ((nread = recv_from_client(clients, i, alpha)) < 0) {
+        if ((nread = recv_from_client(clients, i, alpha, log)) < 0) {
             fprintf(stderr, "start_proxying: Error while receiving from client\n");
             return -1;
         }
@@ -465,7 +472,7 @@ int start_proxying(char *log_file, double alpha, unsigned short listen_port, cha
     char *server_ip = www_ip; //"127.0.0.1";
     unsigned short server_port = 8080; //10000;
     char *my_ip = fake_ip; //"0.0.0.0";
-
+    FILE *log = log_create(log_file);
     
 
 
@@ -526,7 +533,7 @@ int start_proxying(char *log_file, double alpha, unsigned short listen_port, cha
                         data_available = 1;
                     }
 
-                    int nread = process_client_read(clients, i, data_available, &write_set, alpha);
+                    int nread = process_client_read(clients, i, data_available, &write_set, alpha, log);
 
                     if (nread < 0) {
 			printf("nread is less than 0!!!!\n");
