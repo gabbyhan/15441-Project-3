@@ -49,7 +49,16 @@ int main(int argc, char* argv[])
 		buffer[n] = '\0';
 		q = buffer + 12;
 				
-		if(strstr(q,"video.cs.cmu.edu") == NULL) 	
+		if(strstr(q,"video.cs.cmu.edu") == NULL){
+            //generate response with rcode = 3 set
+        }
+        else{
+            //parse query and get the hostname and id
+            //do round robin or dijkstras to get the server ip
+            //generate the response with server ip
+        }
 		//check if it's the right 
 		//parse the buffer and also figure out what to send back and then send it back 
 		sendto(sockfd, (const char *) 
+    }
+}
