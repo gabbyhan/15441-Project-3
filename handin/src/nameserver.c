@@ -18,8 +18,8 @@ int start_server(int argc, char* argv[])
     char *log_file = argv[2];
     char *ip = argv[3];
     int port = atoi(argv[4]);
-    char *servers = argv[5];
-    char *lsas = argv[6];
+    char *servers_file = argv[5];
+    char *lsas_file = argv[6];
     if(strcmp("-r",type) == 0) load_balancer = 1;
     if((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	{
@@ -44,11 +44,29 @@ int start_server(int argc, char* argv[])
 		fprintf(stderr,"Failed to bind listening socket.\n");
 		return -1;
 	}
+    /* get the servers for round robin !*/
+    char *servers_list[100];
+    for(int i =0; i<100; i++){
+        servers_list[i] = malloc(16); //length of ip address/ router name??
+    }
+    int num_servers = get_servers(servers_list, servers_file);
+    printf("num servers: %d\n", num_servers);
+    for(int i=0; i<num_servers; i++){
+        printf("%s\n", servers_list[i]);
+    }
+    int rr_ctr = 0;
+    sprintf(server_ip, "%s", servers_list[rr_ctr]);
+    
+    printf("server ip:%s\n", server_ip);
+    /*TODO: find closest server using dijkstra's */
+    
+
 	while(1)
 	{
-		//TODO: get request id	
 		n = recvfrom(sockfd, (char *) buffer, 4096, MSG_WAITALL, (struct sockaddr *) &cliaddr, &len);
-		parse_query(buffer,q_str);
+        rr_ctr = (rr_ctr+1)%num_servers;
+
+        parse_query(buffer,q_str);
 		printf("%s\n",q_str);
 		if(strstr(q_str,"video.cs.cmu.edu") == NULL)
 		{
