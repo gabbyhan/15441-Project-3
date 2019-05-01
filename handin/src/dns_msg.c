@@ -186,7 +186,7 @@ void create_query(char *query_str, char *message)
     int total_read = sum_lens + num_lens;
     lens[num_lens] = q_len - total_read;
 	
-	int message_len = 12 + q_len+1;
+	int message_len = 13 + q_len;
     
 	// Insert lengths and names into message
 
@@ -207,7 +207,7 @@ void create_query(char *query_str, char *message)
     }
 
 	
-    sprintf(message + message_len, "%s%c", message, 0);
+    sprintf(message + message_len, "%c", 0);
     message_len++;
  
     char QT1 = (char)((QType >> 8) & 255);
@@ -227,26 +227,19 @@ int parse_query(char *data, char *qname)
     int id = btoi(data, 2, 0);
     //Header is 12 bytes total
     int ctr = 0;
-    int i = 12;
-
-	for(i = 0; i < 29; i++)
-	{
-		if((i%2) == 0) printf("\n");
-		printf("%x ",data[i] & 0xff);
-	}	
-	printf("\n");	
-    char l = data[12]; //Question starts at 13th byte
-	printf("l: %c\n",l);
+    int i = 13;
+    int l = (int)data[12]; //Question starts at 13th byte
+	printf("l: %d\n",l);
     while(l != 0)   //QNAME ends with a zero byte
     {
         qname[ctr] = data[i];
         ctr++;
-		//printf("i: %d, l: %d\n", i,l);
+		//printf("i: %d, data:%x, l: %d\n", i,data[i], l);
         i += 1;
         l -= 1;
         if (l == 0){
-            l = data[i];
-			//printf("next length: %d\n", l);
+            l = (int)data[i];
+		    printf("TWO i: %d, data:%x, l: %d\n", i,data[i], l);
             i += 1;
             qname[ctr] = '.';
             ctr++;

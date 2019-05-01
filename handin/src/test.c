@@ -7,7 +7,7 @@ int main()
 	char query_str[17];
 	create_query("video.cs.cmu.edu",message);
 	printf("QUERY: \n");
-	for(i = 0; i < 29; i++)
+	for(i = 0; i < 30; i++)
 	{
 		if((i%2) == 0) printf("\n");
 		printf("%x ",message[i] & 0xff);
