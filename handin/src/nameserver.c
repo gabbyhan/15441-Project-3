@@ -3,6 +3,9 @@
 int main(int argc, char* argv[])
 {
 	int sockfd, len, n;
+	uint16_t id, control;
+	uint16_t req_id;
+	uint64_t counts;
 	char *q;
 	struct sockaddr_in servaddr;
 	char buffer[4096];
@@ -40,15 +43,12 @@ int main(int argc, char* argv[])
 		return -1;
 	}
 	while(1)
-	{	
-		//id is 16 bits long 
-		//control fields have all the things mentioned in the writeup 
-		//4 types of counts 
-		//question 
-		//answer 	
+	{
+		//TODO: get request id	
 		n = recvfrom(sockfd, (char *) buffer, 4096, MSG_WAITALL, (struct sockaddr *) &cliaddr, &len);
 		buffer[n] = '\0';
 		q = buffer + 12;
+				
 		if(strstr(q,"video.cs.cmu.edu") == NULL) 	
 		//check if it's the right 
 		//parse the buffer and also figure out what to send back and then send it back 
