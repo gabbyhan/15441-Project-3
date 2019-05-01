@@ -319,7 +319,7 @@ int recv_from_client(client** clients, size_t i, double alpha, FILE *log) {
       
       if(f != NULL) //IF REQUEST FOR THE F4M FILE
       {
-      	char before_add[f-uri+8];
+/*      	char before_add[f-uri+8];
 	char file_name[f-uri+5];
   	memcpy(before_add, uri, f-uri);
 	memcpy(file_name, before_add, f-uri);
