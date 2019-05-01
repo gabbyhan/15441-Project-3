@@ -2,6 +2,17 @@
 #include <stdio.h>
 #include <string.h>
 
+//converts n bytes of bytes starting at c into an int
+int btoi(char *bytes, int n, int c)
+{
+    int result = 0;
+    for(int i=0; i<n; i++)
+    {
+        result = (result<<8) + bytes[c];
+    }
+    return result;
+}
+
 void create_flags(int query, char *flags)
 {
 	if(query == 0)
@@ -216,4 +227,106 @@ void create_query(char *query_str, char *message)
     char QC2 = (char)(QClass & 255);
     sprintf(message + strlen(message), "%s%c%c", message, QC1, QC2);
 
+}
+
+
+int parse_query(char *data, char *qname)
+{
+    int id = btoi(data, 2, 0);
+    //Header is 12 bytes total
+    int ctr = 0;
+    int i = 13;
+    char l = data[12]; //Question starts at 13th byte
+    while(l != 0)   //QNAME ends with a zero byte
+    {
+        qname[ctr] = data[i];
+        ctr++;
+        i += 1;
+        l -= 1;
+        if (l == 0){
+            l = data[i];
+            i += 1;
+            qname[ctr] = '.';
+            ctr++;
+        }
+    }
+    qname[ctr-1] = '\0';
+    printf("qname:%s\n", qname);
+    //R_INPUT = ''.join(R_INPUT[:-1])
+    //
+    return id;
+}
+
+void parse_response(char *data, char *server_ip)
+{
+    //get number of answers : USE THIS ELSEWHERE
+    /*char num_ansr[2];
+    num_ansr[0]= data[6];
+    num_ansr[1] = data[7];
+
+    int num_answers = atoi(num_ansr);
+    */
+
+    //R_INPUT = [] --> this is the original hostname
+    //Header is 12 bytes total
+    int i = 13;
+    char l = data[12]; //Question starts at 13th byte
+    while(l != 0)   //QNAME ends with a zero byte
+    {
+        //R_INPUT += data[i]
+        i += 1;
+        l -= 1;
+        if (l == 0){
+            l = data[i];
+            i += 1;
+            //R_INPUT += '.'
+        }
+    }
+    //R_INPUT = ''.join(R_INPUT[:-1])
+
+    //R_QType = us(data[i:i+2]) // A record
+    i += 2;
+    //R_QClass = us(data[i:i+2]) // IN
+    i += 2;
+    
+    /*** WE ONLY CARE ABOUT RDATA --> IT IS THE IP ADDRESS ***/
+    
+    //RR_ADDR = ""
+    //RR_NAME = ""
+    int name = btoi(data, 2, i);
+    if (name == 49164){ // C0 0C
+        //RR_NAME = us(data[i:i+2]) // should be C0 0C
+        i += 2;
+    }
+    else{
+        char l = data[i];
+        i += 1;
+        while (l != 0){
+            //RR_NAME += data[i]
+            i += 1;
+            l -= 1;
+            if (l == 0){
+                l = data[i];
+                i += 1;
+                //RR_NAME += '.'
+            }
+        }
+        //RR_NAME = ''.join(RR_NAME[:-1])
+    }
+
+    //RR_TYPE = us(data[i:i+2]) # A record
+    i += 2;
+    //RR_CLASS = us(data[i:i+2]) # IN
+    i += 2;
+    //RR_TTL = (us(data[i:i+2])<<8) + (us(data[i+2:i+4]))
+    i += 4;
+    //RR_DL = us(data[i:i+2])
+    i += 2;
+
+    //addr = [ub(data[i:i+1]),ub(data[i+1:i+2]),ub(data[i+2:i+3]),ub(data[i+3:i+4])]
+    sprintf(server_ip, "%c.%c.%c.%c", data[i], data[i+1], data[i+2], data[i+3]);
+    //addr = [str(a) for a in addr]
+    //RR_ADDR = '.'.join(addr)
+    // print RR_NAME, RR_TYPE, RR_CLASS, RR_TTL, RR_DL
+    printf("server ip: %s\n", server_ip);
 }
