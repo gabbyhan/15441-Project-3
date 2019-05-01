@@ -183,9 +183,9 @@ void create_query(char *query_str, char *message)
     // Insert lengths and names into message
     sprintf(message + strlen(message), "%s%c", message, (char)(lens[0]));
     int l = 1;
-    for (int i=0; i< q_len; i++)
+    for (k=0; k< q_len; k++)
     {
-        char c = query_str[i];
+        char c = query_str[k];
         if(c == '.')
         {
             sprintf(message + strlen(message), "%s%c", message, (char)(lens[l]));
@@ -301,7 +301,7 @@ void parse_response(char *data, char *server_ip)
     i += 2;
 
     //addr = [ub(data[i:i+1]),ub(data[i+1:i+2]),ub(data[i+2:i+3]),ub(data[i+3:i+4])]
-    sprintf(server_ip, "%c.%c.%c.%c", data[i], data[i+1], data[i+2], data[i+3]);
+    sprintf(server_ip, "%d.%d.%d.%d", (int)data[i], (int)data[i+1], (int)data[i+2], (int)data[i+3]);
     //addr = [str(a) for a in addr]
     //RR_ADDR = '.'.join(addr)
     // print RR_NAME, RR_TYPE, RR_CLASS, RR_TTL, RR_DL
