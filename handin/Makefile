@@ -1,27 +1,27 @@
 IDIR=include
-CC=gcc
-CFLAGS=-I$(IDIR)
+CC=gcc 
+CFLAGS= -std=gnu99 -I$(IDIR)
 
 ODIR=build
 SDIR=src
 
 LIBS=-lm
 
-_DEPS = proxy.h httpparser.h customsocket.h log.h 
+_DEPS = nameserver.h httpparser.h customsocket.h log.h dns_msg.h
 DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
 
-_OBJ = proxy.o httpparser.o customsocket.o log.o
+_OBJ = nameserver.o httpparser.o customsocket.o log.o dns_msg.o
 OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ))
 
 
-BINS = proxy
+BINS = nameserver
 
 $(ODIR)/%.o: $(SDIR)/%.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
 
-all: proxy
+all: nameserver
 
-proxy: $(OBJ)
+nameserver: $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
 customsocket: $(OBJ)
@@ -31,6 +31,9 @@ httpparser: $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
 log: $(OBJ)
+	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
+
+dns_msg: $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
 .PHONY: clean

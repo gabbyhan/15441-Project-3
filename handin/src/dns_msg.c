@@ -1,6 +1,4 @@
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
+#include "nameserver.h"
 
 //converts n bytes of bytes starting at c into an int
 int btoi(char *bytes, int n, int c)
@@ -29,6 +27,20 @@ void create_flags(int query, char *flags)
 		flags[8] = 0;
 		flags[9] = 0;
 	}
+	if(query == 2)
+	{
+		flags[0]= 128;
+		flags[1] = 3;
+
+		flags[2] = 0;
+		flags[3] = 0;
+		flags[4] = 0;
+		flags[5] = 1;
+		flags[6] = 0;
+		flags[7] = 0;
+		flags[8] = 0;
+		flags[9] = 0;
+	}
 	else
 	{
 		flags[0] = 0;
@@ -45,98 +57,44 @@ void create_flags(int query, char *flags)
 	}
 }
 
-void create_response(char *response, char *message, char *query_str)
+void create_response(char *response, char *message, int query)
 {
 	int i;
-	char *first;
-	char *second;
-	char *third;
+	char *first = calloc(3,1);
+	char *second = calloc(3,1);
+	char *third = calloc(3,1);
 	char *fourth;
 	char flags[10];
 	int QType = 1; // 16 bits (2 octets)
     int QClass = 1; // 16 bits (2 octets)
-		
-
-	create_flags(0,flags);
-	
-	for(i = 0; i < strlen(flags); i++)
+	create_flags(query,flags);
+	for(i = 0; i < 9; i++)
 	{
-		if((i%2) == 0) printf("\n");
-		printf("%x ",flags[i] & 0xff);
-	}	
-	for(i = 0; i < 10; i++)
-	{
-		message[2+i] = flags[i];
+		sprintf(message+2+i,"%c",flags[i]);
 	}
-    int q_len = strlen(query_str);
-    int num_lens = 1;
-    for(i= 0; i< q_len; i++)
-    {
-        if(query_str[i] == '.'){
-            num_lens++;
-        }
-    }
-    int lens[num_lens+1];
-    i = 0;
-    int j, k;
-    int ctr = 0;
-    int sum_lens = 0;
-    while (i <= q_len)
-    {
-        k = 0;
-        for(j=i; j< q_len; j++)
-        {
-            if(query_str[j] == '.'){
-                lens[ctr] = k;
-                sum_lens +=k;
-                ctr++;
-                break;
-            }
-            k += 1;
-        }
-        i = j+1;
-    }
-    int total_read = sum_lens + num_lens;
-    lens[num_lens] = q_len - total_read;
-
-    // Insert lengths and names into message
-    sprintf(message, "%s%c", message, (char)(lens[0]));
-    int l = 1;
-    for (i=0; i< q_len; i++)
-    {
-        char c = query_str[i];
-        if(c == '.')
-        {
-            sprintf(message, "%s%c", message, (char)(lens[l]));
-            l += 1;
-        }
-        else{
-            sprintf(message, "%s%c", message, c);
-        }    
-    }
-
+	
 	char *rest = strchr(response, '.');
-	strncpy(first,response,rest-response);
-	char *rest1 = strchr(rest,'.');
-	strncpy(second,rest,rest1-rest);
-	char *rest2 = strchr(rest1,'.');
-	strncpy(third,rest1,rest2-rest);
-	fourth = rest2+1;
+	memcpy(first,response,rest-response);
+	char *rest1 = strchr(rest+1,'.');
+	
+	memcpy(second,rest+1,rest1-rest-1);
+	
+	char *rest2 = strrchr(rest1+1,'.');
+	memcpy(third,rest1+1,rest2-rest1-1);
+	fourth = rest2+1;	
 	char R1 = (char)(atoi(first) & 255);
 	char R2 = (char) (atoi(second) & 255);
 	char R3 = (char) (atoi(third) & 255);
 	char R4 = (char) (atoi(fourth) & 255);
-    sprintf(message, "%s%c", message, 0);	
-	char QT1 = (char)((QType >> 8) & 255);
-    char QT2 = (char)(QType & 255);
-    char QC1 = (char)((QClass >> 8) & 255);
-    char QC2 = (char)(QClass & 255);
 	char TTL = (char) 0;
 	char L1 = (char) 0;
-    char L2 = (char) ((1 << 2) & 225);
-    sprintf(message, "%s%c%c%c%c%c%c%c%c", message, QT1, QT2, QC1, QC2, TTL, TTL, TTL, TTL);
-	sprintf(message, "%s%c%c", message, L1, L2);
-    sprintf(message, "%s%c%c%c%c",message, R1, R2, R3, R4);
+    char L2 = (char) ((1 << 2) & 255);
+	for(i = 0; i < 22; i++)
+	{
+    	sprintf(message+34+i, "%c", message[12+i]);
+	}
+    sprintf(message+34+i, "%c%c%c%c%c%c%c%c",TTL,TTL,L1,L2,R1,R2,R3,R4);
+	
 }
 	
 void create_query(char *query_str, char *message)
@@ -224,22 +182,18 @@ void create_query(char *query_str, char *message)
 
 int parse_query(char *data, char *qname)
 {
-    int id = btoi(data, 2, 0);
     //Header is 12 bytes total
     int ctr = 0;
     int i = 13;
     int l = (int)data[12]; //Question starts at 13th byte
-	printf("l: %d\n",l);
     while(l != 0)   //QNAME ends with a zero byte
     {
         qname[ctr] = data[i];
         ctr++;
-		//printf("i: %d, data:%x, l: %d\n", i,data[i], l);
         i += 1;
         l -= 1;
         if (l == 0){
             l = (int)data[i];
-		    printf("TWO i: %d, data:%x, l: %d\n", i,data[i], l);
             i += 1;
             qname[ctr] = '.';
             ctr++;
@@ -248,79 +202,12 @@ int parse_query(char *data, char *qname)
     qname[ctr-1] = '\0';
     //R_INPUT = ''.join(R_INPUT[:-1])
     //
-    return id;
+    return i;
 }
 
 void parse_response(char *data, char *server_ip)
 {
-    //get number of answers : USE THIS ELSEWHERE
-    /*char num_ansr[2];
-    num_ansr[0]= data[6];
-    num_ansr[1] = data[7];
-
-    int num_answers = atoi(num_ansr);
-    */
-
-    //R_INPUT = [] --> this is the original hostname
-    //Header is 12 bytes total
-    int i = 13;
-    char l = data[12]; //Question starts at 13th byte
-    while(l != 0)   //QNAME ends with a zero byte
-    {
-        //R_INPUT += data[i]
-        i += 1;
-        l -= 1;
-        if (l == 0){
-            l = data[i];
-            i += 1;
-            //R_INPUT += '.'
-        }
-    }
-    //R_INPUT = ''.join(R_INPUT[:-1])
-
-    //R_QType = us(data[i:i+2]) // A record
-    i += 2;
-    //R_QClass = us(data[i:i+2]) // IN
-    i += 2;
-    
-    /*** WE ONLY CARE ABOUT RDATA --> IT IS THE IP ADDRESS ***/
-    
-    //RR_ADDR = ""
-    //RR_NAME = ""
-    int name = btoi(data, 2, i);
-    if (name == 49164){ // C0 0C
-        //RR_NAME = us(data[i:i+2]) // should be C0 0C
-        i += 2;
-    }
-    else{
-        char l = data[i];
-        i += 1;
-        while (l != 0){
-            //RR_NAME += data[i]
-            i += 1;
-            l -= 1;
-            if (l == 0){
-                l = data[i];
-                i += 1;
-                //RR_NAME += '.'
-            }
-        }
-        //RR_NAME = ''.join(RR_NAME[:-1])
-    }
-
-    //RR_TYPE = us(data[i:i+2]) # A record
-    i += 2;
-    //RR_CLASS = us(data[i:i+2]) # IN
-    i += 2;
-    //RR_TTL = (us(data[i:i+2])<<8) + (us(data[i+2:i+4]))
-    i += 4;
-    //RR_DL = us(data[i:i+2])
-    i += 2;
-
-    //addr = [ub(data[i:i+1]),ub(data[i+1:i+2]),ub(data[i+2:i+3]),ub(data[i+3:i+4])]
+    int i= 60;
     sprintf(server_ip, "%d.%d.%d.%d", (int)data[i], (int)data[i+1], (int)data[i+2], (int)data[i+3]);
-    //addr = [str(a) for a in addr]
-    //RR_ADDR = '.'.join(addr)
-    // print RR_NAME, RR_TYPE, RR_CLASS, RR_TTL, RR_DL
     printf("server ip: %s\n", server_ip);
 }
