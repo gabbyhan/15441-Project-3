@@ -34,8 +34,90 @@ void create_flags(int query, char *flags)
 	}
 }
 
-void create_response(char *response, char *id)
+void create_response(char *response, char *id, char *message)
 {
+	int i;
+	char flags[10];
+	int QType = 1; // 16 bits (2 octets)
+    int QClass = 1; // 16 bits (2 octets)
+	
+
+	create_flags(0,flags);
+	for(i = 0; i < 10; i++)
+	{
+		message[2+i] = flags[i];
+	}
+    int q_len = strlen(query_str);
+    int num_lens = 1;
+    for(int i= 0; i< q_len; i++)
+    {
+        if(query_str[i] == '.'){
+            num_lens++;
+        }
+    }
+    int lens[num_lens+1];
+    int i = 0;
+    int j, k;
+    int ctr = 0;
+    int sum_lens = 0;
+    while (i <= q_len)
+    {
+        k = 0;
+        for(j=i; j< q_len; j++)
+        {
+            if(query_str[j] == '.'){
+                lens[ctr] = k;
+                sum_lens +=k;
+                ctr++;
+                break;
+            }
+            k += 1;
+        }
+        i = j+1;
+    }
+    int total_read = sum_lens + num_lens;
+    lens[num_lens] = q_len - total_read;
+
+    // Insert lengths and names into message
+    sprintf(message + strlen(message), "%s%c", message, (char)(lens[0]));
+    int l = 1;
+    for (int i=0; i< q_len; i++)
+    {
+        char c = query_str[i];
+        if(c == '.')
+        {
+            sprintf(message + strlen(message), "%s%c", message, (char)(lens[l]));
+            l += 1;
+        }
+        else{
+            sprintf(message + strlen(message), "%s%c", message, c);
+        }    
+    }
+    sprintf(message + strlen(message), "%s%c", message, 0);
+ 	
+   
+	
+	char QT1 = (char)((QType >> 8) & 255);
+    char QT2 = (char)(QType & 255);
+    char QC1 = (char)((QClass >> 8) & 255);
+    char QC2 = (char)(QClass & 255);
+	char TTL = (char) 0;
+	char L1 = (char) 0;
+    char L2 = (char) ((1 << 2) & 225);
+	char R1 = (char) 
+	char R2
+	char R3
+	char R4
+ 	char R5
+	char R6
+	char R7
+	char R8
+    sprintf(message + strlen(message), "%s%c%c%c%c%c%c%c%c", message, QT1, QT2, QC1, QC2, TTL, TTL, TTL, TTL);
+	sprintf(message + strlen(message), "%s%c%c", message, L1, L2);
+    sprintf
+ 
+	
+	
 /*
     // build RR's
     RR_ADDR = ""
