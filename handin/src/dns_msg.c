@@ -48,10 +48,14 @@ void create_flags(int query, char *flags)
 void create_response(char *response, char *id, char *message)
 {
 	int i;
+	char *first;
+	char *second;
+	char *third;
+	char *fourth;
 	char flags[10];
 	int QType = 1; // 16 bits (2 octets)
     int QClass = 1; // 16 bits (2 octets)
-	
+		
 
 	create_flags(0,flags);
 	for(i = 0; i < 10; i++)
@@ -104,10 +108,19 @@ void create_response(char *response, char *id, char *message)
             sprintf(message + strlen(message), "%s%c", message, c);
         }    
     }
-    sprintf(message + strlen(message), "%s%c", message, 0);
- 	
-   
-	
+
+	char *rest = strchr(response, '.');
+	strncpy(first,response,rest-response);
+	char *rest1 = strchr(rest,'.');
+	strncpy(second,rest,rest1-rest);
+	char *rest2 = strchr(rest1,'.');
+	strncpy(third,rest1,rest2-rest);
+	fourth = rest2+1;
+	char R1 = (char)(atoi(first) & 255);
+	char R2 = (char) (atoi(second) & 255);
+	char R3 = (char) (atoi(third) & 255);
+	char R4 = (char) (atoi(fourth) & 255);
+    sprintf(message + strlen(message), "%s%c", message, 0);	
 	char QT1 = (char)((QType >> 8) & 255);
     char QT2 = (char)(QType & 255);
     char QC1 = (char)((QClass >> 8) & 255);
@@ -115,47 +128,11 @@ void create_response(char *response, char *id, char *message)
 	char TTL = (char) 0;
 	char L1 = (char) 0;
     char L2 = (char) ((1 << 2) & 225);
-	char R1 = (char) 
-	char R2
-	char R3
-	char R4
- 	char R5
-	char R6
-	char R7
-	char R8
     sprintf(message + strlen(message), "%s%c%c%c%c%c%c%c%c", message, QT1, QT2, QC1, QC2, TTL, TTL, TTL, TTL);
 	sprintf(message + strlen(message), "%s%c%c", message, L1, L2);
-    sprintf
- 
-	
-	
-/*
-    // build RR's
-    RR_ADDR = ""
-    if not query:
-        RR_NAME = 49164 //C0 0C
-        message += s(RR_NAME)
-
-        RR_QTYPE = 1 //A record
-        RR_QCLASS = 1 //IN
-        RR_TTL = 0 // no caching
-        RR_DATALENGTH = 4
-        if ROUND_ROBIN:
-            RR_ADDR = SERVERS[SERV_CURR]
-            SERV_CURR = (SERV_CURR + 1) % len(SERVERS)
-        else:
-            RR_ADDR = getBestServer(addr[0], SERVERS, lsa_file)
-            
-        message += s(RR_QTYPE)+s(RR_QCLASS) + \
-                struct.pack('>I',RR_TTL) + s(RR_DATALENGTH)
-        RR_ADDR = [int(float(a)) for a in RR_ADDR.split('.')]
-        for a in RR_ADDR:
-            message += b(a)
-        t = int(time.time())
-        out_addr = '.'.join([str(r) for r in RR_ADDR])
-*/
+    sprintf(message + strlen(message), "%s%c%c%c%c",message, R1, R2, R3, R4);
 }
-
+	
 void create_query(char *query_str, char *message)
 {
     //create the header
