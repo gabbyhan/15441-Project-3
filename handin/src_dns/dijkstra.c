@@ -68,7 +68,7 @@ int get_servers(char **servers, char *path)
     	}
     	//if no, add sender and add neighbors
     	if(added == 0){
-    	    strcpy(servers[num_v], sender);
+    	    strcpy(servers[num_servers], sender);
     	    num_servers++;
     	}
         free(sender);

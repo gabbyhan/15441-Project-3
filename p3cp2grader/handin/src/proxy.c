@@ -227,7 +227,7 @@ int process_client_send(client **clients, size_t i, unsigned short server_port, 
     if(clients[i]->is_server)
     {
         //hard coded the hostname
-        int rc = resolve("video.cs.cmu.edu", dns_fd, char *dns (char*)server_ip);
+        int rc = resolve("video.cs.cmu.edu", dns_fd, (char*)server_ip);
         if (rc != 0) {
             // handle error
             printf("resolve returned something bad\n");

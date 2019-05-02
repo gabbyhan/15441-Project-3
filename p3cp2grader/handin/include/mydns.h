@@ -13,7 +13,7 @@
  *
  * @return 0 on success, -1 otherwise
  */
-int init_mydns(char *fake_ip, unsigned int dns_port);
+int init_mydns(char *dns_ip, unsigned int dns_port);
 
 
 /**
@@ -39,4 +39,4 @@ int init_mydns(char *fake_ip, unsigned int dns_port);
  *
  * @return 0 on success, -1 otherwise
  */
-int resolve(char *node, int sockfd, char *dns_ip, unsigned int dns_port, char *result);
+int resolve(char *node, int sockfd, char *result);

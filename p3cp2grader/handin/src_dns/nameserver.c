@@ -54,16 +54,16 @@ int start_server(int argc, char* argv[])
     for(int i=0; i<num_servers; i++){
         printf("%s\n", servers_list[i]);
     }
+    
     int rr_ctr = 0;
     sprintf(server_ip, "%s", servers_list[rr_ctr]);
     
     printf("server ip:%s\n", server_ip);
     /*TODO: find closest server using dijkstra's */
-    
 
-	while(1)
-	{
-		n = recvfrom(sockfd, (char *) buffer, 4096, MSG_WAITALL, (struct sockaddr *) &cliaddr, &len);
+	//while(1)
+	//{
+		n = recvfrom(sockfd, (char *) buffer, 4096, MSG_WAITALL, NULL, NULL);
         rr_ctr = (rr_ctr+1)%num_servers;
 
         parse_query(buffer,q_str);
@@ -75,8 +75,8 @@ int start_server(int argc, char* argv[])
         else{
 			create_response(server_ip,buffer,0);
         }
-		sendto(sockfd,(char *) buffer,4096,MSG_DONTWAIT, (struct sockaddr *) &cliaddr, len);
-    }
+		sendto(sockfd,(char *) buffer,4096,MSG_DONTWAIT, NULL, 0);
+    //}
 	return 0;
 }
 

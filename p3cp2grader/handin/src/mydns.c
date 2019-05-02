@@ -9,7 +9,7 @@
  *
  * @return 0 on success, -1 otherwise
  */
-int init_mydns(char *fake_ip, unsigned int dns_port)
+int init_mydns(char *dns_ip, unsigned int dns_port)
 {
     int sockfd;
     struct sockaddr_in servaddr;
@@ -27,7 +27,7 @@ int init_mydns(char *fake_ip, unsigned int dns_port)
 	}
 	bzero((char *)&servaddr, sizeof(servaddr));
 	servaddr.sin_family = AF_INET;
-	if(inet_aton(fake_ip, &(servaddr.sin_addr)) == 0)
+	if(inet_aton(dns_ip, &(servaddr.sin_addr)) == 0)
  	{
 		fprintf(stderr, "IP conversion failure.\n");
 		return -1;
@@ -65,30 +65,20 @@ int init_mydns(char *fake_ip, unsigned int dns_port)
  * @return 0 on success, -1 otherwise
  */
 
-int resolve(char *node, int sockfd, char *dns_ip, unsigned int dns_port, char *result)
+int resolve(char *node, int sockfd, char *result)
 {
     char message[4096];
     char response[4096];
     char server_ip[16];
-    
-    struct sockaddr_in servaddr;
-    bzero((char *)&servaddr, sizeof(servaddr));
-    servaddr.sin_family = AF_INET;
-    if(inet_aton(ip, &(servaddr.sin_addr)) == 0)
-    {
-        fprintf(stderr, "IP conversion failure.\n");
-        return -1;
-    }
-    servaddr.sin_port = htons(port);
     create_query(node, message);
-    
-    if(-1 == sendto(sockfd,(char *) message,4096,MSG_DONTWAIT,(struct sockaddr *)&servaddr, sizeof(servaddr))){
+
+    if(-1 == send(sockfd,(char *) message,4096,MSG_DONTWAIT)){
         return -1;
     }
-    
+
     int n = recvfrom(sockfd, (char *)response, 4096, MSG_WAITALL, NULL, NULL);
     parse_response(response, server_ip);
-    
+
     printf("resolve returned ip!: %s\n", server_ip);
     sprintf(result, "%s", server_ip);
     return 0;
