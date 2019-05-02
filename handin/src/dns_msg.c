@@ -45,7 +45,7 @@ void create_flags(int query, char *flags)
 	}
 }
 
-void create_response(char *response, char *id, char *message)
+void create_response(char *response, char *id, char *message, char *query_str)
 {
 	int i;
 	char *first;
@@ -64,14 +64,14 @@ void create_response(char *response, char *id, char *message)
 	}
     int q_len = strlen(query_str);
     int num_lens = 1;
-    for(int i= 0; i< q_len; i++)
+    for(i= 0; i< q_len; i++)
     {
         if(query_str[i] == '.'){
             num_lens++;
         }
     }
     int lens[num_lens+1];
-    int i = 0;
+    i = 0;
     int j, k;
     int ctr = 0;
     int sum_lens = 0;
@@ -96,7 +96,7 @@ void create_response(char *response, char *id, char *message)
     // Insert lengths and names into message
     sprintf(message + strlen(message), "%s%c", message, (char)(lens[0]));
     int l = 1;
-    for (int i=0; i< q_len; i++)
+    for (i=0; i< q_len; i++)
     {
         char c = query_str[i];
         if(c == '.')
